@@ -22,8 +22,9 @@
     <p id="error">Incorrect password. Please try again.</p>
   </div>
   <script>
-    const DATA = {"salt": "cNdkPERq45l/lV5qFVKrHg==", "iv": "Kwvm+WT74v/AfSdQ", "ct": "SZsIrxTaB9/0qFZ0DE4r2XqGjEjHVAMshit4LcFV7A+20AbZAG6SImSnNikz/fyJT7TRiYHLcGym/Xg7L5Q=", "iter": 600000};
+    const DATA = {"salt": "XAmBYmZAHwjdURGO6jpjQQ==", "iv": "wPHrgF/pwaoczS8z", "ct": "WUKUTmfObGYBb92FJF7O8vIpE/PI8hCmQbGtin99sKoIdiP+zZjm9TJo6V7nQwxuzf6QVJUwuilDKO22/u0=", "iter": 600000};
     const b64ToBytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+
     document.getElementById("unlock-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const errEl = document.getElementById("error");
@@ -33,10 +34,22 @@
         const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(document.getElementById("pwd").value), "PBKDF2", false, ["deriveKey"]);
         const key = await crypto.subtle.deriveKey({ name: "PBKDF2", salt: b64ToBytes(DATA.salt), iterations: DATA.iter, hash: "SHA-256" }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
         const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64ToBytes(DATA.iv) }, key, b64ToBytes(DATA.ct));
-        document.open();
-        document.write(new TextDecoder().decode(decrypted));
-        document.close();
-      } catch (_) {
+        const decodedHtml = new TextDecoder().decode(decrypted);
+
+        // Parse and replace the document cleanly without document.write()
+        const parser = new DOMParser();
+        const newDoc = parser.parseFromString(decodedHtml, "text/html");
+        document.documentElement.replaceWith(newDoc.documentElement);
+
+        // Re-execute any inline <script> tags inside the decrypted HTML
+        document.querySelectorAll("script").forEach(oldScript => {
+          const newScript = document.createElement("script");
+          Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+          newScript.textContent = oldScript.textContent;
+          oldScript.replaceWith(newScript);
+        });
+      } catch (err) {
+        console.error(err);
         errEl.style.display = "block";
       }
     });
